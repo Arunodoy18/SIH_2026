@@ -1,0 +1,6 @@
+# Normalise line endings; treat source as text so diffs work everywhere.
+* text=auto eol=lf
+*.png binary
+*.tif binary
+*.parquet binary
+*.ico binary
