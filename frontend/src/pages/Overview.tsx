@@ -17,7 +17,7 @@ const LAYERS: { key: LayerKey; label: string; sw?: string }[] = [
 ];
 
 export function Overview() {
-  const { summary, plan, data, visible, setVisible, colourBy, setColourBy, busy, dirty, err, runScenario, loadBaseline } = useNirnay();
+  const { summary, plan, data, visible, setVisible, colourBy, setColourBy, busy, retrying, dirty, err, runScenario, loadBaseline } = useNirnay();
 
   const [glofGrowth, setGlofGrowth] = useState(0);
   const [popGrowth, setPopGrowth] = useState(0);
@@ -47,7 +47,7 @@ export function Overview() {
                 <option value="hazard">colour: hazard tier</option>
               </select>
               <span style={{ fontFamily: "IBM Plex Mono", fontSize: 11, color: "var(--ink-dim)" }}>
-                {dirty ? "scenario view" : "baseline"} &middot; {summary?.generated_s ?? "…"}s{err ? ` · ${err}` : ""}
+                {dirty ? "scenario view" : "baseline"} &middot; {summary?.generated_s ?? "…"}s
               </span>
             </div>
           </div>
@@ -134,16 +134,30 @@ export function Overview() {
                 <input type="checkbox" checked={monsoon} onChange={(e) => setMonsoon(e.target.checked)} />
                 Monsoon season
               </label>
-              <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+              <div style={{ display: "flex", gap: 8, marginTop: 14, alignItems: "center" }}>
                 <button disabled={busy} onClick={() =>
                   runScenario({
                     glof_lake_growth_years: glofGrowth, population_growth_pct: popGrowth,
                     tourist_load_factor: tourist, monsoon, max_reloc_distance_km: maxDist, horizon_years: horizon,
                   })}>
-                  {busy ? "Running…" : "Run scenario"}
+                  {busy ? (retrying ? "Waking backend, retrying…" : "Computing…") : "Run scenario"}
                 </button>
                 <button className="ghost" disabled={busy || !dirty} onClick={loadBaseline}>Reset</button>
               </div>
+              {busy && (
+                <div style={{ fontSize: 11.5, color: "var(--ink-dim)", marginTop: 8 }}>
+                  Re-running the full hazard + relocation pipeline{retrying ? " — first request woke a sleeping backend, this can take up to a minute" : " — usually ~30s on the hosted backend"}.
+                </div>
+              )}
+              {err && !busy && (
+                <div style={{
+                  marginTop: 10, padding: "9px 12px", borderRadius: 5, fontSize: 12,
+                  background: "color-mix(in srgb, var(--red) 10%, transparent)",
+                  border: "1px solid color-mix(in srgb, var(--red) 35%, var(--line))", color: "var(--ink)",
+                }}>
+                  Scenario failed: {err}
+                </div>
+              )}
             </div>
           </div>
 

@@ -17,6 +17,7 @@ interface Store {
   colourBy: "priority" | "hazard";
   setColourBy: (c: "priority" | "hazard") => void;
   busy: boolean;
+  retrying: boolean;
   dirty: boolean;
   err: string | null;
   loadBaseline: () => Promise<void>;
@@ -36,6 +37,7 @@ export function NirnayProvider({ children }: { children: ReactNode }) {
   const [visible, setVisible] = useState(DEFAULT_VISIBLE);
   const [colourBy, setColourBy] = useState<"priority" | "hazard">("priority");
   const [busy, setBusy] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -63,9 +65,20 @@ export function NirnayProvider({ children }: { children: ReactNode }) {
   useEffect(() => { loadBaseline(); }, []);
 
   async function runScenario(body: ScenarioBody) {
-    setBusy(true); setErr(null);
+    setBusy(true); setErr(null); setRetrying(false);
     try {
-      const r = await api.scenario(body);
+      let r;
+      try {
+        r = await api.scenario(body);
+      } catch (firstErr) {
+        // The most common real-world failure here is a Render free-tier instance that
+        // went to sleep: the first request wakes the container (can take well over a
+        // minute) and dies before the pipeline even starts. By the time we retry, the
+        // container is warm and the same call normally succeeds in ~30s. One silent
+        // retry turns that cold-start hiccup into a longer wait instead of a hard error.
+        setRetrying(true);
+        r = await api.scenario(body);
+      }
       setSummary(r.summary); setPlan(r.relocation_plan);
       setData((d) => ({
         ...d,
@@ -78,7 +91,7 @@ export function NirnayProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       setErr(String(e));
     } finally {
-      setBusy(false);
+      setBusy(false); setRetrying(false);
     }
   }
 
@@ -95,7 +108,7 @@ export function NirnayProvider({ children }: { children: ReactNode }) {
 
   return (
     <Ctx.Provider value={{
-      summary, plan, data, visible, setVisible, colourBy, setColourBy, busy, dirty, err,
+      summary, plan, data, visible, setVisible, colourBy, setColourBy, busy, retrying, dirty, err,
       loadBaseline, runScenario, narrative, narrativeBusy, narrativeError, generateReport,
     }}>
       {children}
