@@ -7,23 +7,32 @@ name = "redzone"
 version = "0.1.0"
 description = "Hazard red zones, carrying capacity and relocation priority for a DDMA (SIH 2026, Sikkim)"
 requires-python = ">=3.9"
+# Exact-pinned (not >=): the hazard/ML pipeline is seeded for determinism (see
+# generate_sikkim.py, generate_landslide_inventory.py, calibrate.py, train_landslide_model.py),
+# but that only holds within a fixed dependency set — a newer numpy/scikit-learn/scipy can
+# shift floating-point results (tree splits, NNLS calibration, IDW interpolation) even with
+# identical random seeds. Without pins, every fresh `pip install` (i.e. every Render rebuild)
+# resolves whatever is newest on PyPI that day, so the reported numbers (persons to move,
+# capex, BCR) could silently drift between deploys. Versions below are what this project was
+# built and tested against (29/29 tests, tuned ML AUC, tuned calibration) — bump deliberately,
+# not implicitly.
 dependencies = [
-    "numpy>=1.24",
-    "pandas>=2.0",
-    "shapely>=2.0",
-    "geopandas>=0.14",
-    "pyproj>=3.5",
-    "rasterio>=1.3",
-    "scipy>=1.10",
-    "scikit-learn>=1.3",
-    "joblib>=1.3",
-    "pulp>=2.7",
-    "anthropic>=0.25",
-    "groq>=0.11",
-    "fastapi>=0.110",
-    "uvicorn[standard]>=0.27",
-    "pydantic>=2.6",
-    "pyarrow>=14.0",
+    "numpy==2.0.2",
+    "pandas==2.3.3",
+    "shapely==2.0.7",
+    "geopandas==1.0.1",
+    "pyproj==3.6.1",
+    "rasterio==1.4.3",
+    "scipy==1.13.1",
+    "scikit-learn==1.6.1",
+    "joblib==1.5.3",
+    "pulp==3.3.1",
+    "anthropic==0.125.0",
+    "groq==1.0.0",
+    "fastapi==0.128.8",
+    "uvicorn[standard]==0.39.0",
+    "pydantic==2.13.5",
+    "pyarrow==21.0.0",
 ]
 
 [project.optional-dependencies]
