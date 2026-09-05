@@ -1,5 +1,12 @@
 import type { RelocationPlan, ScenarioBody, Summary } from "./types";
 
+export interface Narrative {
+  mode: "ai" | "template";
+  provider: "groq" | "anthropic" | null;
+  model: string | null;
+  text: string;
+}
+
 // Local dev: unset -> "/api", proxied to http://127.0.0.1:8000 by vite.config.ts.
 // Production (Netlify): set VITE_API_BASE_URL to the deployed backend's URL (no trailing
 // slash), e.g. https://nirnay-backend.onrender.com — the static build has no dev proxy.
@@ -18,6 +25,7 @@ export const api = {
   habitation: (id: string) => get<any>(`/habitations/${id}`),
   layer: (name: string) => get<GeoJSON.FeatureCollection>(`/layers/${name}`),
   plan: () => get<RelocationPlan>("/relocation/plan"),
+  narrative: () => get<Narrative>("/report/narrative"),
   scenario: async (body: ScenarioBody) => {
     const r = await fetch(BASE + "/scenario", {
       method: "POST",

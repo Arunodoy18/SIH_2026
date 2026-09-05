@@ -22,6 +22,24 @@ export interface Summary {
       decomposition_r2: number;
       decomposition_loo_r2: number;
     };
+    landslide_method: "ml" | "heuristic";
+    landslide_model: { roc_auc_test: number; n_train: number; n_test: number } | null;
+  };
+  seismic_outlook: {
+    gutenberg_richter: {
+      a: number; b: number;
+      by_magnitude: { magnitude: number; annual_rate: number; return_period_years: number | null }[];
+    };
+    elastic_rebound: {
+      last_major_event: number;
+      years_elapsed: number;
+      mean_recurrence_years: number;
+      aperiodicity: number;
+      windows: {
+        window_years: number; poisson_probability: number; renewal_probability: number;
+        renewal_vs_poisson: "suppressed" | "elevated" | "comparable";
+      }[];
+    };
   };
   relocation: {
     phases: PlanPhase[];

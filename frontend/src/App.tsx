@@ -3,8 +3,9 @@ import { MapView, type LayerKey } from "./MapView";
 import { Sidebar } from "./Sidebar";
 import { Drawer } from "./Drawer";
 import { BottomPanel } from "./BottomPanel";
+import { ReportModal } from "./ReportModal";
 import { ErrorBoundary } from "./ErrorBoundary";
-import { api } from "./api";
+import { api, type Narrative } from "./api";
 import type { RelocationPlan, ScenarioBody, Summary } from "./types";
 
 const DEFAULT_VISIBLE: Record<LayerKey, boolean> = {
@@ -22,6 +23,11 @@ export function App() {
   const [busy, setBusy] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportBusy, setReportBusy] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [narrative, setNarrative] = useState<Narrative | null>(null);
 
   async function loadBaseline() {
     try {
@@ -62,6 +68,17 @@ export function App() {
     }
   }
 
+  async function generateReport() {
+    setReportOpen(true); setReportBusy(true); setReportError(null);
+    try {
+      setNarrative(await api.narrative());
+    } catch (e) {
+      setReportError(String(e));
+    } finally {
+      setReportBusy(false);
+    }
+  }
+
   return (
     <div className="app">
       <Sidebar
@@ -87,7 +104,16 @@ export function App() {
         </div>
         {selected && <Drawer habId={selected} onClose={() => setSelected(null)} />}
       </div>
-      <BottomPanel plan={plan} selected={selected} onSelect={setSelected} />
+      <BottomPanel
+        plan={plan} selected={selected} onSelect={setSelected}
+        onGenerateReport={generateReport} reportBusy={reportBusy}
+      />
+      {reportOpen && (
+        <ReportModal
+          data={narrative} busy={reportBusy} error={reportError}
+          onClose={() => setReportOpen(false)}
+        />
+      )}
     </div>
   );
 }

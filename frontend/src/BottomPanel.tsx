@@ -2,11 +2,13 @@ import { crore, num } from "./api";
 import type { RelocationPlan } from "./types";
 
 export function BottomPanel({
-  plan, selected, onSelect,
+  plan, selected, onSelect, onGenerateReport, reportBusy,
 }: {
   plan: RelocationPlan | null;
   selected: string | null;
   onSelect: (id: string) => void;
+  onGenerateReport: () => void;
+  reportBusy: boolean;
 }) {
   if (!plan) return <div className="bottom spin">loading plan…</div>;
 
@@ -21,7 +23,13 @@ export function BottomPanel({
             {p.persons_unmet ? ` · ${num(p.persons_unmet)} unmet` : ""}
           </span>
         ))}
-        <span style={{ color: "var(--ink-dim)", marginLeft: "auto" }}>
+        <button
+          className="ghost" style={{ marginLeft: "auto" }}
+          disabled={reportBusy} onClick={onGenerateReport}
+        >
+          {reportBusy ? "Drafting…" : "Generate DDMA report"}
+        </button>
+        <span style={{ color: "var(--ink-dim)" }}>
           solver: {plan.solver} · {plan.split_habitations} split across sites
         </span>
       </div>

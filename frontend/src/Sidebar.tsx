@@ -37,6 +37,7 @@ export function Sidebar({
   const c = summary?.counts;
   const h = summary?.hazard;
   const r = summary?.relocation;
+  const seismicWindow = summary?.seismic_outlook?.elastic_rebound?.windows?.[0];
 
   return (
     <div className="sidebar">
@@ -71,6 +72,33 @@ export function Sidebar({
           ))}
           <div className="kv"><span className="k">Composite R² vs loss</span><span>{h.calibration.composite_r2}</span></div>
           <div className="kv"><span className="k">Ranking AUC</span><span>{h.calibration.ranking_auc}</span></div>
+          {h.landslide_method === "ml" && h.landslide_model && (
+            <div className="kv">
+              <span className="k">Landslide model (RF)</span>
+              <span style={{ color: "var(--green)" }}>AUC {h.landslide_model.roc_auc_test.toFixed(2)}</span>
+            </div>
+          )}
+        </>
+      )}
+
+      {seismicWindow && (
+        <>
+          <h2>Seismic outlook (elastic rebound)</h2>
+          <div className="kv">
+            <span className="k">{seismicWindow.window_years}-yr renewal vs Poisson</span>
+            <span>
+              {(seismicWindow.renewal_probability * 100).toFixed(1)}% vs{" "}
+              {(seismicWindow.poisson_probability * 100).toFixed(1)}%
+            </span>
+          </div>
+          <div className="kv">
+            <span className="k">Signal</span>
+            <span style={{ textTransform: "capitalize" }}>{seismicWindow.renewal_vs_poisson}</span>
+          </div>
+          <div className="kv">
+            <span className="k">Since 2011 M6.9</span>
+            <span>{summary?.seismic_outlook.elastic_rebound.years_elapsed} yr</span>
+          </div>
         </>
       )}
 
