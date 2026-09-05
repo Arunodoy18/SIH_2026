@@ -1,10 +1,12 @@
 """Turn the structured plan into DDMA report prose.
 
 Two modes, same call:
-  "ai"        ANTHROPIC_API_KEY is set -> drafted by an LLM from the structured facts below.
-  "template"  no key, or the call fails for any reason -> a deterministic, still-readable
-              paragraph assembled from the same facts. The MVP is complete either way;
-              the AI path is strictly an upgrade, never a hard dependency.
+  "ai"        a provider key is set -> drafted by an LLM from the structured facts below.
+              Provider priority: GROQ_API_KEY (fast, generous free tier — good for a live
+              demo) then ANTHROPIC_API_KEY. Both are optional and independent.
+  "template"  no key, or every configured provider's call fails -> a deterministic,
+              still-readable paragraph assembled from the same facts. The MVP is complete
+              either way; the AI path is strictly an upgrade, never a hard dependency.
 
 The model is never handed anything to embellish beyond the numbers already computed by the
 pipeline — it drafts prose *from* the facts dict, it doesn't invent figures.
@@ -14,8 +16,11 @@ from __future__ import annotations
 
 import os
 
-_DEFAULT_MODEL = os.environ.get("NIRNAY_NARRATIVE_MODEL", "claude-sonnet-5")
-_MAX_TOKENS = 900
+_GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
+_ANTHROPIC_MODEL = os.environ.get("NIRNAY_NARRATIVE_MODEL", "claude-sonnet-5")
+# gpt-oss models spend part of the token budget on hidden reasoning before the visible
+# answer; keep this generous so the final paragraphs never get cut off mid-sentence.
+_MAX_TOKENS = 1500
 
 _SYSTEM_PROMPT = """You are drafting the narrative section of a pre-disaster relocation \
 plan for a District Disaster Management Authority (DDMA) in India. You are given a JSON \
@@ -31,9 +36,23 @@ of plain, professional planning-document prose (no headings, no bullet points, n
 4. The economic case — total capex, portfolio benefit–cost ratio, payback period, and a one
    sentence recommendation to the DDMA.
 
-Use ONLY the numbers given. Never invent a figure, a place name, or a date that is not in
-the JSON. Keep the whole thing under 320 words. Write it as it would appear in an actual
-submitted report, not as a description of the data."""
+Rules:
+- Use ONLY the numbers given. Never invent a figure, a place name, or a date not in the JSON.
+- Every entry in top_habitations is INDEPENDENT: its "destination" field belongs to that
+  habitation ONLY (it may itself already list more than one site, joined with "+", when that
+  habitation's population was split across sites). Never move one habitation's destination
+  onto a different habitation, and never merge several habitations into one composite sentence.
+- Money is already given pre-formatted (e.g. "₹646.5 cr") — quote those strings verbatim.
+  Do not convert, recompute, or re-derive any figure yourself.
+- Keep the whole thing under 300 words, four paragraphs, no preamble and no closing remarks
+  outside the four paragraphs — write it as it would appear in an actual submitted report."""
+
+
+def _cr(inr) -> str:
+    """Format a rupee amount as a crore string, e.g. 6465864850 -> '₹646.6 cr'."""
+    if inr is None:
+        return "n/a"
+    return f"₹{inr / 1e7:.1f} cr"
 
 
 def _facts(summary: dict, plan: dict) -> dict:
@@ -44,6 +63,7 @@ def _facts(summary: dict, plan: dict) -> dict:
             "destination": r.get("destination"), "persons": r["persons_to_move"],
             "benefit_cost_ratio": r.get("benefit_cost_ratio"),
             "payback_years": r.get("payback_years"),
+            "capex": _cr(r.get("relocation_capex_inr")),
         }
         for r in ranked[:6]
     ]
@@ -57,6 +77,9 @@ def _facts(summary: dict, plan: dict) -> dict:
             f"(renewal model) vs {w['poisson_probability']*100:.1f}% (naive memoryless) "
             f"— {w['renewal_vs_poisson']}"
         )
+    phases = [
+        {**ph, "capex": _cr(ph.get("capex_inr"))} for ph in summary["relocation"]["phases"]
+    ]
     return {
         "aoi": summary.get("aoi"),
         "population": summary["counts"]["population"],
@@ -68,11 +91,11 @@ def _facts(summary: dict, plan: dict) -> dict:
         "landslide_method": summary["hazard"].get("landslide_method"),
         "landslide_model_auc": (summary["hazard"].get("landslide_model") or {}).get("roc_auc_test"),
         "seismic_outlook_headline": seismic_headline,
-        "relocation_phases": summary["relocation"]["phases"],
+        "relocation_phases": phases,
         "relocation_totals": {
             "persons_moved": summary["relocation"]["persons_moved"],
             "persons_unmet": summary["relocation"]["persons_unmet"],
-            "capex_inr": summary["relocation"]["total_relocation_capex_inr"],
+            "capex": _cr(summary["relocation"]["total_relocation_capex_inr"]),
             "portfolio_bcr": summary["relocation"]["portfolio_benefit_cost_ratio"],
             "payback_years": summary["relocation"]["portfolio_payback_years"],
         },
@@ -115,7 +138,7 @@ def _template_narrative(f: dict) -> str:
     for ph in phases:
         p3_bits.append(
             f"{ph['label']} covers {ph['habitations']} habitations and "
-            f"{ph['persons_to_move']:,} people (₹{ph['capex_inr']/1e7:.1f} cr)"
+            f"{ph['persons_to_move']:,} people ({ph['capex']})"
         )
     lead_bit = ""
     if lead:
@@ -127,7 +150,7 @@ def _template_narrative(f: dict) -> str:
 
     tot = f["relocation_totals"]
     p4 = (
-        f"Total relocation capital cost is estimated at ₹{tot['capex_inr']/1e7:.1f} crore "
+        f"Total relocation capital cost is estimated at {tot['capex']} "
         f"against a portfolio benefit-cost ratio of {tot['portfolio_bcr']} and a payback "
         f"period of {tot['payback_years']} years"
         + (f", with {tot['persons_unmet']:,} people not yet matched to safe capacity"
@@ -139,10 +162,29 @@ def _template_narrative(f: dict) -> str:
     return f"{p1}\n\n{p2}\n\n{p3}\n\n{p4}"
 
 
-def _ai_narrative(f: dict) -> str | None:
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
+def _call_groq(f: dict, api_key: str) -> str | None:
+    try:
+        import json
+
+        from groq import Groq
+
+        client = Groq(api_key=api_key)
+        resp = client.chat.completions.create(
+            model=_GROQ_MODEL,
+            max_tokens=_MAX_TOKENS,
+            temperature=0.3,
+            messages=[
+                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "user", "content": json.dumps(f, indent=2)},
+            ],
+        )
+        text = resp.choices[0].message.content
+        return text.strip() or None
+    except Exception:  # noqa: BLE001 - deliberately broad: any failure here must fall back, never 500
         return None
+
+
+def _call_anthropic(f: dict, api_key: str) -> str | None:
     try:
         import json
 
@@ -150,7 +192,7 @@ def _ai_narrative(f: dict) -> str | None:
 
         client = anthropic.Anthropic(api_key=api_key)
         resp = client.messages.create(
-            model=_DEFAULT_MODEL,
+            model=_ANTHROPIC_MODEL,
             max_tokens=_MAX_TOKENS,
             temperature=0.3,
             system=_SYSTEM_PROMPT,
@@ -162,9 +204,27 @@ def _ai_narrative(f: dict) -> str | None:
         return None
 
 
+def _ai_narrative(f: dict) -> tuple[str | None, str | None, str | None]:
+    """Returns (text, provider, model) — provider/model are None when nothing is configured
+    or every configured provider failed."""
+    groq_key = os.environ.get("GROQ_API_KEY")
+    if groq_key:
+        text = _call_groq(f, groq_key)
+        if text:
+            return text, "groq", _GROQ_MODEL
+
+    anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
+    if anthropic_key:
+        text = _call_anthropic(f, anthropic_key)
+        if text:
+            return text, "anthropic", _ANTHROPIC_MODEL
+
+    return None, None, None
+
+
 def generate_narrative(summary: dict, plan: dict) -> dict:
     facts = _facts(summary, plan)
-    text = _ai_narrative(facts)
+    text, provider, model = _ai_narrative(facts)
     if text:
-        return {"mode": "ai", "model": _DEFAULT_MODEL, "text": text}
-    return {"mode": "template", "model": None, "text": _template_narrative(facts)}
+        return {"mode": "ai", "provider": provider, "model": model, "text": text}
+    return {"mode": "template", "provider": None, "model": None, "text": _template_narrative(facts)}

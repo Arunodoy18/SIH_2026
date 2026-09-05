@@ -1,0 +1,18 @@
+# Render "Blueprint" — connect the repo at render.com/deploy, or New > Blueprint > this repo,
+# and Render reads this file automatically. Secrets (sync: false) are prompted for at
+# deploy time and stored in Render's dashboard — never in this file or in git.
+services:
+  - type: web
+    name: nirnay-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: openai/gpt-oss-120b

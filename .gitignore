@@ -22,6 +22,13 @@ frontend/dist/
 frontend/.vite/
 *.tsbuildinfo
 
+# Secrets — never commit real env files, only the .env.example templates
+.env
+.env.local
+.env.*.local
+backend/.env
+frontend/.env
+
 # Editor / OS
 .DS_Store
 .idea/

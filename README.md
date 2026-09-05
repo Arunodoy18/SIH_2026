@@ -5,6 +5,8 @@ Primary demo state: **Sikkim** — Mangan DDMA / Teesta-corridor (Chungthang →
 
 SIH 2026 · Problem: *Intelligent Identification of Hazard-Based Red Zones, Carrying Capacity Assessment, and Immediate Relocation Needs for Vulnerable Habitations.*
 
+Deploying? Frontend → Netlify, backend → Render — see **[DEPLOYMENT.md](DEPLOYMENT.md)** for why that split is necessary and the exact steps.
+
 ---
 
 ## What it does (three deliverables)
@@ -24,11 +26,11 @@ Delivered as a **planner's dashboard**: hazard-tier map, per-habitation factor b
 3. **Seismic hazard has a clock** — `hazard/seismic_gr.py` adds a Gutenberg–Richter frequency model plus an elastic-rebound (Brownian Passage Time) renewal probability anchored to the real 2011 M6.9 Sikkim earthquake, so near-term seismic risk reflects time-since-last-rupture, not just a static BIS zone.
 4. **Relocation as optimization** — `relocation/optimizer.py` solves a capacitated generalized-assignment problem (MILP via SciPy/HiGHS, PuLP/greedy fallback): which habitations move first, to which green site, respecting each site's spare capacity, minimizing cost + distance + community-split. Surfaces **unmet demand** when safe land runs out.
 5. **Cost–benefit per settlement** — `relocation/costbenefit.py`: one-time relocation capex vs 25-year discounted expected losses → payback years and benefit–cost ratio. The language a DDMA uses to request funds.
-6. **GenAI report narrative** — `redzone/report/narrative.py` drafts the DDMA report prose from the computed facts via the Anthropic API when `ANTHROPIC_API_KEY` is set, falling back to a deterministic template otherwise — the MVP is complete either way.
+6. **GenAI report narrative** — `redzone/report/narrative.py` drafts the DDMA report prose from the computed facts via Groq (primary — fast, generous free tier, `GROQ_API_KEY`) or Anthropic (secondary, `ANTHROPIC_API_KEY`), falling back to a deterministic template when neither is set or a call fails — the MVP is complete either way. All money figures are pre-formatted in code before the model ever sees them; it drafts prose, never arithmetic.
 
 ## Stack (lightweight, file-based — migrates to PostGIS later behind `redzone/data/store.py`)
 
-- **Pipeline / API**: Python 3.9+ · GeoPandas · Shapely 2 · rasterio · NumPy · SciPy · scikit-learn + joblib (landslide RF) · PuLP · FastAPI · Uvicorn · Anthropic SDK (optional, GenAI narrative)
+- **Pipeline / API**: Python 3.9+ · GeoPandas · Shapely 2 · rasterio · NumPy · SciPy · scikit-learn + joblib (landslide RF) · PuLP · FastAPI · Uvicorn · Groq + Anthropic SDKs (both optional, GenAI narrative)
 - **Storage**: GeoParquet + GeoJSON + Cloud-Optimized GeoTIFF + trained model artifacts (all in `backend/data/`)
 - **Frontend**: React + Vite + TypeScript + MapLibre GL + Recharts
 
@@ -74,7 +76,8 @@ python -m redzone.seed.generate_sikkim              # -> data/interim/  syntheti
 python -m redzone.ml.generate_landslide_inventory   # -> data/interim/landslide_inventory.parquet
 python -m redzone.ml.train_landslide_model          # -> data/models/landslide_rf.joblib (+ metrics)
 python -m redzone.pipeline                          # -> data/processed/ hazard grid, scores, plan
-export ANTHROPIC_API_KEY=...                        # optional — enables GenAI report narrative
+export GROQ_API_KEY=...                             # optional — enables GenAI report narrative (fast, free tier)
+export ANTHROPIC_API_KEY=...                        # optional secondary provider, same fallback
 uvicorn redzone.api.main:app --reload               # http://127.0.0.1:8000/docs
 
 # 2. Frontend  (separate terminal)

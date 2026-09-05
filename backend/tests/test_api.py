@@ -40,6 +40,7 @@ def test_summary_carries_seismic_outlook_and_landslide_method():
 
 
 def test_report_narrative_falls_back_to_template_without_api_key(monkeypatch):
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     r = client.get("/report/narrative")
     assert r.status_code == 200

@@ -1,6 +1,9 @@
 import type { RelocationPlan, ScenarioBody, Summary } from "./types";
 
-const BASE = "/api";
+// Local dev: unset -> "/api", proxied to http://127.0.0.1:8000 by vite.config.ts.
+// Production (Netlify): set VITE_API_BASE_URL to the deployed backend's URL (no trailing
+// slash), e.g. https://nirnay-backend.onrender.com — the static build has no dev proxy.
+const BASE = import.meta.env.VITE_API_BASE_URL || "/api";
 
 async function get<T>(path: string): Promise<T> {
   const r = await fetch(BASE + path);
