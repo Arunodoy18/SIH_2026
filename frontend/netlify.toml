@@ -5,8 +5,8 @@
 [build.environment]
   NODE_VERSION = "20"
 
-# Single-page app: any deep link falls back to index.html (client-side routing is not
-# used today, but this is the standard safe default and costs nothing).
+# Client-side routing (react-router-dom): any deep link, e.g. /districts/mangan/plan,
+# must fall back to index.html so the router (not Netlify) resolves the path.
 [[redirects]]
   from = "/*"
   to = "/index.html"
