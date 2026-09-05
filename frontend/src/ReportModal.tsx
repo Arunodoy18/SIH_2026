@@ -40,8 +40,8 @@ export function ReportModal({
                 <>
                   <span
                     style={{
-                      background: "rgba(47,191,113,.15)", color: "var(--green)",
-                      border: "1px solid rgba(47,191,113,.35)", borderRadius: 999,
+                      background: "rgba(63,143,86,.14)", color: "var(--green)",
+                      border: "1px solid rgba(63,143,86,.35)", borderRadius: 999,
                       padding: "2px 10px", fontSize: 11, fontWeight: 700, letterSpacing: ".03em",
                     }}
                   >

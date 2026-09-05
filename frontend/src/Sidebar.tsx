@@ -41,7 +41,7 @@ export function Sidebar({
 
   return (
     <div className="sidebar">
-      <h1>RedZone · Mangan DDMA</h1>
+      <h1>NIRNAY · Mangan DDMA</h1>
       <div className="sub">{summary?.aoi ?? "loading…"}</div>
 
       {c && (

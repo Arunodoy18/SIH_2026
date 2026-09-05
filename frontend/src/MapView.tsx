@@ -79,21 +79,21 @@ export function MapView({
       m.addLayer({
         id: "habitations-sel", source: "habitations", type: "line",
         filter: ["==", ["get", "hab_id"], ""],
-        paint: { "line-color": "#ffffff", "line-width": 2.5 },
+        paint: { "line-color": "#b7410e", "line-width": 2.5 },
       });
 
       m.addLayer({
         id: "rivers-line", source: "rivers", type: "line",
-        paint: { "line-color": "#5bc8ff", "line-width": 1.4, "line-opacity": 0.6 },
+        paint: { "line-color": "#2b5f63", "line-width": 1.4, "line-opacity": 0.65 },
       });
       m.addLayer({
         id: "glacial_lakes-line", source: "glacial_lakes", type: "line",
-        paint: { "line-color": "#8ad2ff", "line-width": 2, "line-dasharray": [2, 1.5], "line-opacity": 0.9 },
+        paint: { "line-color": "#b7410e", "line-width": 2, "line-dasharray": [2, 1.5], "line-opacity": 0.8 },
       });
       m.addLayer({
         id: "flows-line", source: "flows", type: "line",
         paint: {
-          "line-color": ["match", ["get", "phase"], 1, "#e5484d", "#ef8a3c"],
+          "line-color": ["match", ["get", "phase"], 1, "#a83226", "#c2661e"],
           "line-width": ["interpolate", ["linear"], ["get", "persons"], 100, 1.5, 4000, 6],
           "line-opacity": 0.85,
         },
@@ -102,16 +102,16 @@ export function MapView({
         id: "destination_sites-pt", source: "destination_sites", type: "circle",
         paint: {
           "circle-radius": ["interpolate", ["linear"], ["get", "spare_capacity"], 500, 5, 4000, 14],
-          "circle-color": "#2fbf71", "circle-opacity": 0.5,
-          "circle-stroke-color": "#7dffb8", "circle-stroke-width": 1.4,
+          "circle-color": "#3f8f56", "circle-opacity": 0.6,
+          "circle-stroke-color": "#fffdf8", "circle-stroke-width": 1.6,
         },
       });
       m.addLayer({
         id: "historical_losses-pt", source: "historical_losses", type: "circle",
         paint: {
           "circle-radius": ["interpolate", ["linear"], ["get", "houses_damaged"], 10, 3, 350, 11],
-          "circle-color": "#b892ff", "circle-opacity": 0.55,
-          "circle-stroke-color": "#d9c8ff", "circle-stroke-width": 1,
+          "circle-color": "#8a5a7c", "circle-opacity": 0.6,
+          "circle-stroke-color": "#fffdf8", "circle-stroke-width": 1.2,
         },
       });
 

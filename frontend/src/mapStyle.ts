@@ -1,6 +1,7 @@
 import type { StyleSpecification } from "maplibre-gl";
 
 // Minimal raster basemap (OSM) — swap for an offline vector style or MapTiler key for the finale.
+// Tinted toward the field-survey palette (warm paper, desaturated) instead of full-color OSM.
 export const BASE_STYLE: StyleSpecification = {
   version: 8,
   sources: {
@@ -12,21 +13,22 @@ export const BASE_STYLE: StyleSpecification = {
     },
   },
   layers: [
-    { id: "bg", type: "background", paint: { "background-color": "#0f1419" } },
-    { id: "osm", type: "raster", source: "osm", paint: { "raster-opacity": 0.55, "raster-saturation": -0.6, "raster-brightness-max": 0.85 } },
+    { id: "bg", type: "background", paint: { "background-color": "#f4f2ea" } },
+    { id: "osm", type: "raster", source: "osm", paint: { "raster-opacity": 0.75, "raster-saturation": -0.55, "raster-brightness-min": 0.35, "raster-brightness-max": 1 } },
   ],
 };
 
+// Matches --green/--yellow/--orange/--red in theme.css (field-survey palette).
 export const HAZ_COLORS: Record<string, string> = {
-  green: "#2fbf71",
-  yellow: "#e5b83b",
-  orange: "#ef8a3c",
-  red: "#e5484d",
+  green: "#3f8f56",
+  yellow: "#b78a1e",
+  orange: "#c2661e",
+  red: "#a83226",
 };
 
 export const PRIORITY_COLORS: Record<string, string> = {
-  relocate_now: "#e5484d",
-  plan: "#ef8a3c",
-  monitor: "#e5b83b",
-  safe: "#3d5166",
+  relocate_now: "#a83226",
+  plan: "#c2661e",
+  monitor: "#b78a1e",
+  safe: "#8f8570",
 };

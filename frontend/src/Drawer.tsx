@@ -33,10 +33,10 @@ export function Drawer({ habId, onClose }: { habId: string; onClose: () => void 
       <div style={{ height: 170, margin: "6px 0" }}>
         <ResponsiveContainer>
           <RadarChart data={radar} outerRadius={62}>
-            <PolarGrid stroke="#313d4f" />
-            <PolarAngleAxis dataKey="k" tick={{ fill: "#9fb0c3", fontSize: 10 }} />
+            <PolarGrid stroke="#ddd6c4" />
+            <PolarAngleAxis dataKey="k" tick={{ fill: "#6b6353", fontSize: 10 }} />
             <PolarRadiusAxis domain={[0, 1]} tick={false} axisLine={false} />
-            <Radar dataKey="v" stroke="#4aa3ff" fill="#4aa3ff" fillOpacity={0.35} />
+            <Radar dataKey="v" stroke="#b7410e" fill="#b7410e" fillOpacity={0.28} />
           </RadarChart>
         </ResponsiveContainer>
       </div>
