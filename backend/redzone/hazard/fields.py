@@ -10,15 +10,8 @@ from __future__ import annotations
 import geopandas as gpd
 import numpy as np
 
-from redzone.config import CRS_METRIC, HazardParams
+from redzone.config import HazardParams
 from redzone.hazard import grid as G
-
-
-def _centroids_lonlat(gdf: gpd.GeoDataFrame) -> tuple[np.ndarray, np.ndarray]:
-    """Polygon centroids as lon/lat, computed in a projected CRS (no geographic warning)."""
-    c = gdf.to_crs(CRS_METRIC).geometry.centroid
-    c = gpd.GeoSeries(c, crs=CRS_METRIC).to_crs("EPSG:4326")
-    return c.x.to_numpy(), c.y.to_numpy()
 
 
 def seismic_field(faults: gpd.GeoDataFrame, rivers: gpd.GeoDataFrame) -> np.ndarray:
@@ -42,15 +35,15 @@ def landslide_field(habitations: gpd.GeoDataFrame, rivers: gpd.GeoDataFrame,
 
     # slope proxy: interpolate habitation slope_gt30_pct onto the grid via IDW, then
     # add a north-rising alpine trend (terrain gets steeper up-valley).
-    slope = _idw(habitations, "slope_gt30_pct", lon, lat) / 100.0
+    slope = G.idw_interpolate(habitations, "slope_gt30_pct", lon, lat) / 100.0
     northness = (lat - G.GRID.min_lat) / (G.GRID.max_lat - G.GRID.min_lat)
     slope = np.clip(0.6 * slope + 0.4 * northness, 0, 1)
 
-    rain = _idw(habitations, "annual_rainfall_mm", lon, lat)
+    rain = G.idw_interpolate(habitations, "annual_rainfall_mm", lon, lat)
     rain = G.norm01(rain) * p.rain_multiplier * (1.15 if p.monsoon else 0.8)
 
     # chronic landslide points — habitation centroids weighted by recorded incidents
-    cx, cy = _centroids_lonlat(habitations)
+    cx, cy = G.centroids_lonlat(habitations)
     inc = habitations["landslide_incidents"].to_numpy(float)
     hot_field = np.zeros((G.GRID.ny, G.GRID.nx), dtype="float32")
     for xi, yi, ni in zip(cx, cy, inc):
@@ -79,23 +72,8 @@ def flood_field(rivers: gpd.GeoDataFrame, habitations: gpd.GeoDataFrame,
     southness = 1.0 - (lat - G.GRID.min_lat) / (G.GRID.max_lat - G.GRID.min_lat)
     accumulation = near_channel * (0.4 + 0.6 * southness)
 
-    rain = G.norm01(_idw(habitations, "annual_rainfall_mm", lon, lat))
+    rain = G.norm01(G.idw_interpolate(habitations, "annual_rainfall_mm", lon, lat))
     rain = rain * p.rain_multiplier * (1.2 if p.monsoon else 0.7)
 
     field = 0.55 * near_channel + 0.30 * accumulation + 0.15 * np.clip(rain, 0, 1)
     return G.norm01(G.smooth(field, sigma_km=0.7))
-
-
-def _idw(gdf: gpd.GeoDataFrame, col: str, lon: np.ndarray, lat: np.ndarray,
-         power: float = 2.0) -> np.ndarray:
-    """Inverse-distance-weighted interpolation of a habitation attribute onto the grid."""
-    px, py = _centroids_lonlat(gdf)
-    v = gdf[col].to_numpy(dtype="float32")
-    out = np.zeros_like(lon, dtype="float32")
-    wsum = np.zeros_like(lon, dtype="float32")
-    for xi, yi, vi in zip(px, py, v):
-        d2 = (lon - xi) ** 2 + (lat - yi) ** 2 + 1e-9
-        w = 1.0 / d2 ** (power / 2.0)
-        out += w * vi
-        wsum += w
-    return (out / wsum).astype("float32")

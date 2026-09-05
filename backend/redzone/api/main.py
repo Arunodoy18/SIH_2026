@@ -24,6 +24,7 @@ from redzone.api.schemas import ScenarioRequest
 from redzone.config import CRS_GEO
 from redzone.data import store
 from redzone.pipeline import run_pipeline
+from redzone.report import generate_narrative
 
 app = FastAPI(title="RedZone API", version="0.1.0",
               description="Hazard red zones, carrying capacity & relocation priority — Mangan DDMA, Sikkim")
@@ -125,6 +126,18 @@ def relocation_plan():
         return store.load_json("relocation_plan")
     except FileNotFoundError as e:
         raise HTTPException(404, str(e))
+
+
+@app.get("/report/narrative")
+def report_narrative():
+    """DDMA report prose for the last persisted pipeline run — LLM-drafted if
+    ANTHROPIC_API_KEY is set, a deterministic template otherwise (see redzone/report/)."""
+    try:
+        summary = store.load_json("summary")
+        plan = store.load_json("relocation_plan")
+    except FileNotFoundError as e:
+        raise HTTPException(404, str(e))
+    return generate_narrative(summary, plan)
 
 
 @app.post("/scenario")

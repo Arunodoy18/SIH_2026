@@ -1,4 +1,4 @@
-.PHONY: help setup seed pipeline api web test fmt clean
+.PHONY: help setup seed train-ml pipeline api web test fmt clean
 
 PY := backend/.venv/bin/python
 UVICORN := backend/.venv/bin/uvicorn
@@ -12,6 +12,10 @@ setup: ## create venv + install backend (editable) and frontend deps
 
 seed: ## regenerate synthetic Sikkim dataset -> backend/data/interim/
 	cd backend && ../$(PY) -m redzone.seed.generate_sikkim
+
+train-ml: ## generate the landslide inventory + train the RandomForest -> backend/data/models/
+	cd backend && ../$(PY) -m redzone.ml.generate_landslide_inventory
+	cd backend && ../$(PY) -m redzone.ml.train_landslide_model
 
 pipeline: ## run full analytics pipeline -> backend/data/processed/
 	cd backend && ../$(PY) -m redzone.pipeline

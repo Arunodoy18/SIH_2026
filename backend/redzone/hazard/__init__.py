@@ -26,6 +26,10 @@ from redzone.hazard import synth_losses
 from redzone.hazard.calibrate import calibrate_weights
 from redzone.hazard.glof import LakeHazard, build_glof
 
+# NOTE: redzone.ml.features imports redzone.hazard.grid, so importing redzone.ml at module
+# scope here would be circular whenever something imports redzone.ml.* first (e.g.
+# `python -m redzone.ml.train_landslide_model`). Deferred into build_hazard() instead.
+
 
 @dataclass
 class HazardResult:
@@ -38,9 +42,13 @@ class HazardResult:
     lakes: list  # list[LakeHazard]
     calibration: dict
     losses: gpd.GeoDataFrame  # historical events with (synthesised) loss magnitudes
+    landslide_method: str      # "ml" (trained RandomForest) or "heuristic" (fallback)
+    landslide_model_metadata: dict | None = None
 
 
 def build_hazard(settings: Settings | None = None) -> HazardResult:
+    from redzone.ml import landslide_ml  # deferred — see the note above the imports
+
     settings = settings or Settings()
     p = settings.hazard
 
@@ -51,8 +59,17 @@ def build_hazard(settings: Settings | None = None) -> HazardResult:
     losses = store.load_interim("historical_losses")
 
     glof_grid, lake_records = build_glof(lakes_gdf, rivers, p)
+
+    use_ml = p.landslide_method == "ml" and landslide_ml.is_available()
+    if use_ml:
+        landslide_grid = landslide_ml.predict_field(habitations, rivers, faults)
+        landslide_method = "ml"
+    else:
+        landslide_grid = F.landslide_field(habitations, rivers, p)
+        landslide_method = "heuristic"
+
     stack = {
-        "landslide": F.landslide_field(habitations, rivers, p),
+        "landslide": landslide_grid,
         "glof": glof_grid,
         "seismic": F.seismic_field(faults, rivers),
         "flood": F.flood_field(rivers, habitations, p),
@@ -85,7 +102,8 @@ def build_hazard(settings: Settings | None = None) -> HazardResult:
     return HazardResult(
         stack=stack, weights=weights, composite=comp, tiers=tiers,
         habitations=hab_scored, tier_polygons=tier_polys, lakes=lake_records,
-        calibration=calib, losses=losses,
+        calibration=calib, losses=losses, landslide_method=landslide_method,
+        landslide_model_metadata=landslide_ml.load_metadata() if use_ml else None,
     )
 
 

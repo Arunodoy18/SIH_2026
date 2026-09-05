@@ -8,6 +8,7 @@ The API calls run_pipeline(settings) in-memory for POST /scenario.
 
 from __future__ import annotations
 
+import datetime
 import time
 from dataclasses import dataclass
 
@@ -18,6 +19,7 @@ from redzone.config import CRS_GEO, HAZARDS, PROCESSED_DIR, Settings
 from redzone.data import store
 from redzone.hazard import build_hazard
 from redzone.hazard.grid import write_cog
+from redzone.hazard.seismic_gr import seismic_outlook
 from redzone.relocation import build_relocation
 from redzone.vulnerability import build_svi
 
@@ -89,7 +91,12 @@ def _summary(hab, hz, plan, settings: Settings, secs: float) -> dict:
             "weights": hz.weights,
             "tier_breaks": hz.calibration.get("tier_breaks"),
             "calibration": hz.calibration["metrics"],
+            "landslide_method": hz.landslide_method,
+            "landslide_model": hz.landslide_model_metadata,
         },
+        "seismic_outlook": seismic_outlook(
+            settings.seismic, as_of_year=datetime.date.today().year  # noqa: DTZ011 - calendar year only
+        ),
         "relocation": {
             "phases": plan["phases"],
             "persons_moved": plan["totals"]["persons_moved"],

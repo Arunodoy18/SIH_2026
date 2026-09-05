@@ -12,6 +12,7 @@ venv/
 backend/data/raw/*
 backend/data/interim/*
 backend/data/processed/*
+backend/data/models/*
 !backend/data/**/.gitkeep
 !backend/data/samples/
 

@@ -18,8 +18,9 @@ RAW_DIR = DATA_DIR / "raw"
 INTERIM_DIR = DATA_DIR / "interim"
 PROCESSED_DIR = DATA_DIR / "processed"
 SAMPLES_DIR = DATA_DIR / "samples"
+MODELS_DIR = DATA_DIR / "models"
 
-for _d in (RAW_DIR, INTERIM_DIR, PROCESSED_DIR):
+for _d in (RAW_DIR, INTERIM_DIR, PROCESSED_DIR, MODELS_DIR):
     _d.mkdir(parents=True, exist_ok=True)
 
 # --------------------------------------------------------------------------------------
@@ -103,6 +104,10 @@ class HazardParams:
     monsoon: bool = True          # monsoon amplifies landslide + flood
     rain_multiplier: float = 1.0  # extra rainfall stress (climate scenario)
     glof_lake_growth_years: int = 0  # project glacial-lake area N years forward
+    # "heuristic" = fields.landslide_field (slope/rain/incident proxy);
+    # "ml" = a RandomForest trained on a landslide inventory (redzone/ml/) — falls back to
+    # "heuristic" automatically if no trained model is on disk (see ml/landslide_ml.py).
+    landslide_method: str = "ml"
 
 
 # --------------------------------------------------------------------------------------
@@ -202,6 +207,30 @@ OPTIMIZER_PARAMS = OptimizerParams()
 
 
 # --------------------------------------------------------------------------------------
+# Seismic temporal outlook — Gutenberg–Richter frequency + elastic-rebound renewal
+# probability (Brownian Passage Time). District-level, not yet per-fault-segment: public
+# seismotectonic data isn't resolved finely enough for that at this scale. Parameters below
+# are literature-typical for the Eastern Himalaya, anchored to the real 2011 M6.9 event —
+# not fit to a project-specific catalog. Flagged the same way as the capacity norms.
+# --------------------------------------------------------------------------------------
+@dataclass
+class SeismicRenewalParams:
+    gr_b: float = 0.9                       # Gutenberg–Richter b-value (typical Himalaya: 0.8-1.0)
+    gr_m_ref: float = 6.0                   # reference magnitude the return period below is anchored to
+    gr_return_period_years_at_m_ref: float = 75.0  # regional M>=6.0 return period (informs G-R "a")
+    reference_magnitudes: tuple = (6.0, 6.5, 7.0)
+    last_major_event_year: int = 2011       # the Sikkim M6.9 earthquake, 18 Sep 2011
+    # BPT renewal ("elastic rebound") uses the same mean recurrence as the G-R anchor above,
+    # so the two models describe one coherent story: G-R sets the long-run average rate;
+    # BPT reshapes *when* the next event is likely, given 2011 reset the clock.
+    bpt_aperiodicity: float = 0.5           # coefficient of variation; USGS WGCEP practice: 0.3-0.7
+    outlook_windows_years: tuple = (10, 25, 50)
+
+
+SEISMIC_RENEWAL = SeismicRenewalParams()
+
+
+# --------------------------------------------------------------------------------------
 # Bundle passed through the pipeline; POST /scenario patches a copy of this.
 # --------------------------------------------------------------------------------------
 @dataclass
@@ -211,6 +240,7 @@ class Settings:
     cost: CostParams = field(default_factory=lambda: CostParams())
     priority: PriorityParams = field(default_factory=PriorityParams)
     optimizer: OptimizerParams = field(default_factory=OptimizerParams)
+    seismic: SeismicRenewalParams = field(default_factory=SeismicRenewalParams)
     population_growth_pct: float = 0.0     # apply to current population before scoring (2011->horizon)
     tourist_load_factor: float = 1.0      # multiply effective population (peak-season scenario)
 

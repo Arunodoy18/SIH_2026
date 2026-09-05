@@ -30,7 +30,26 @@ Supporting layers: `glacial_lakes` (area 2000 vs 2024, dam type, volume, downstr
 4. **Composite + tiers** (`composite.py`) — weighted sum → 0–1; tiers cut at **quantiles** of the composite over the grid (relative zonation, as GSI/BMTPC susceptibility maps are classed).
 5. **Per-habitation exposure** — blend of hazard *at the settlement point* (0.60) + polygon p85 (0.25) + polygon mean (0.15); linear hazards only touch the valley floor where people live, so a plain polygon mean under-reads them.
 
-Current calibrated weights on the synthetic seed: **GLOF 0.49, landslide 0.23, seismic 0.16, flood 0.12** — AHP put GLOF at 0.24; the loss record (dominated by Oct 2023) moves it to ~0.49. Composite R² ≈ 0.48, ranking AUC ≈ 0.97.
+Current calibrated weights on the synthetic seed: **GLOF ~0.49, landslide ~0.23, seismic ~0.16, flood ~0.12** (shifts slightly run to run depending on the landslide method — see below) — AHP put GLOF at 0.24; the loss record (dominated by Oct 2023) moves it to ~0.49.
+
+### Landslide susceptibility — trained model, not a fixed formula
+
+`redzone/ml/` replaces the hand-tuned decay-kernel landslide field with a **RandomForestClassifier**, the standard technique in landslide susceptibility mapping (LSM) literature:
+
+1. `generate_landslide_inventory.py` — since no real GSI/Bhukosh inventory is wired in yet, presence points are drawn from a *latent* occurrence probability with the same physical drivers as the old heuristic (slope, rainfall, forest cover, river/fault proximity) but a **different functional form** — a logistic model with a slope×rainfall interaction, sampled with probability ∝ latent⁵ (landslides occur past a susceptibility threshold, not smoothly proportional to it) — plus 15% uniform noise for realism. Pseudo-absence points are uniform-random, standard LSM practice. This makes training a genuine fit, not a relabelled reproduction of the heuristic.
+2. `train_landslide_model.py` — 300-tree RandomForest, 6 features (slope, rainfall, forest cover, river/fault distance, northness), stratified 80/20 split. Current held-out **ROC-AUC ≈ 0.78** — a credible number for 6 coarse 250 m-resolution proxy features, not suspiciously perfect.
+3. `landslide_ml.py` — inference; `hazard/__init__.py` uses it automatically when a trained model is on disk (`HazardParams.landslide_method = "ml"`), falling back to the original heuristic otherwise — no hard dependency, no crash if untrained.
+
+Swap step 1's synthetic points for a real inventory (GSI Bhukosh) and steps 2–3 are unchanged.
+
+### Seismic temporal outlook — Gutenberg–Richter + elastic rebound
+
+The spatial seismic field (BIS zone + fault proximity + site amplification) has no time dimension. `hazard/seismic_gr.py` adds one, district-level:
+
+- **Gutenberg–Richter law** `log₁₀N(≥M) = a − b·M` — the long-run annual rate of earthquakes at or above a magnitude, anchored so M≥6.0 has a ~75-year regional return period (b = 0.9, typical for the Himalaya) → converted to a Poisson exceedance probability.
+- **Elastic rebound (Reid, 1910) → Brownian Passage Time renewal model** — strain resets near zero right after a rupture, so recurrence isn't memoryless. Closed-form BPT CDF (Matthews, Ellsworth & Reasenberg, 2002), anchored to the real **2011 M6.9 Sikkim earthquake** as the last reset. Result: near-term probability is currently *suppressed* relative to naive Poisson (10-yr window: ~1.6% renewal vs ~12.5% Poisson) — the actual signature elastic rebound predicts, and a real, testable property (`tests/test_seismic_gr.py`).
+
+Both parameters are literature-typical for the Eastern Himalaya, not fit to a project-specific catalog — flagged the same way as the capacity norms. Exposed in `summary.seismic_outlook`, not yet decomposed to individual fault segments (needs finer public seismotectonic data than exists at this scale).
 
 ## Deliverable 2 — carrying capacity  (`redzone/capacity/`) — WORKING STUB
 
@@ -59,11 +78,15 @@ Current calibrated weights on the synthetic seed: **GLOF 0.49, landslide 0.23, s
    `pv_benefit = EAL · annuity(6%, 25 yr)`; `BCR = pv_benefit / capex`; `payback = capex / EAL`.
 5. **Phased plan** (`plan.py`) — Phase 1 = relocate_now, Phase 2 = plan; ordered by BCR within phase; origin→site flow lines (one per leg, so splits are visible).
 
-Current baseline: 2 habitations relocate-now + 5 plan, ~9,700 people, ₹556 cr capex, **portfolio BCR 1.44, payback ~9 yr** — Phase-1 leaders (Chungthang, Toong) return ₹1.4–1.5 per rupee; marginal ones sit below 1.0 → stage or monitor.
+Current baseline (with the ML landslide model): 3 habitations relocate-now + 4 plan, ~11,300 people, ₹647 cr capex, **portfolio BCR 1.23, payback ~10.4 yr** — figures move a little run to run as the landslide method or calibration shifts; the mechanism, not the exact number, is what to defend.
+
+## Report narrative (GenAI)
+
+`redzone/report/narrative.py` drafts the DDMA report's prose from the already-computed `summary` + `relocation_plan` facts — never asked to invent a number. If `ANTHROPIC_API_KEY` is set, an LLM (`claude-sonnet-5` by default, `NIRNAY_NARRATIVE_MODEL` env override) drafts four short paragraphs (situation, method, plan, economics); any failure — no key, no network, rate limit — falls back silently to a deterministic template built from the same facts dict, so `GET /report/narrative` always returns something usable. This is the one genuinely optional piece in the whole pipeline: the MVP is complete with or without a key.
 
 ## Scenario engine
 
-`POST /scenario` patches a copy of `DEFAULT_SETTINGS` (hazard weights, monsoon, glacial-lake growth projection, population growth, tourist load, max relocation distance, discount rate, horizon) and re-runs the whole pipeline in-memory (~2 s). Determinism is per-call (RNGs seeded inside each function), so scenarios don't perturb each other.
+`POST /scenario` patches a copy of `DEFAULT_SETTINGS` (hazard weights, monsoon, glacial-lake growth projection, population growth, tourist load, max relocation distance, discount rate, horizon) and re-runs the whole pipeline in-memory (~2 s). Determinism is per-call (RNGs seeded inside each function), so scenarios don't perturb each other. It does **not** call the narrative endpoint — that stays an explicit, on-demand action so an LLM call (when a key is configured) isn't fired on every slider drag.
 
 ## Anticipated judge questions
 
@@ -74,3 +97,6 @@ Current baseline: 2 habitations relocate-now + 5 plan, ~9,700 people, ₹556 cr 
 | Carrying capacity looks arbitrary. | It partly is today (stub) — every coefficient is a named lever in `config.py` pending norm citations; that sourcing is the stated remaining task. |
 | How is this different from the BMTPC Vulnerability Atlas? | That is static, national, coarse, hazard-only. This is GPU-level, hazard × vulnerability × capacity, scenario-driven, and outputs a costed, capacity-constrained relocation plan — a decision, not an atlas. |
 | Is the optimiser real? | Yes — a MILP (HiGHS), not a sort. It splits habitations across sites, respects capacity, and reports unmet demand when safe land runs out. |
+| Is the landslide "ML" real, or is it your heuristic renamed? | It's a trained RandomForest, evaluated on a held-out split (ROC-AUC ≈ 0.78) — see `redzone/ml/`. The training points are synthetic (no real GSI inventory wired in yet) but generated from a *different* functional form than the heuristic specifically so training is a genuine fit, not a relabelling. Swappable back to the heuristic with one config flag. |
+| Why Gutenberg–Richter / elastic rebound for seismic — isn't the BIS zone enough? | The BIS zone is spatial only; it says nothing about *when*. G-R gives the long-run frequency; the BPT renewal model (standard USGS/WGCEP practice) shows near-term probability is presently suppressed because the 2011 M6.9 reset the clock — a real, testable property, not a static label. |
+| What if there's no Anthropic API key for the "AI" report? | It falls back to a deterministic template built from the same facts — same endpoint, same shape of output, no crash, clearly marked `mode: "template"` vs `"ai"`. |

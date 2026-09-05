@@ -9,7 +9,7 @@ from rasterio.features import rasterize, shapes
 from scipy import ndimage
 from shapely.geometry import shape
 
-from redzone.config import CRS_GEO, GRID, PROCESSED_DIR
+from redzone.config import CRS_GEO, CRS_METRIC, GRID, PROCESSED_DIR
 
 # mean ground size of one pixel at ~27.6 N, in km (lon shrinks by cos(lat))
 _PX_LAT_KM = GRID.res * 111.32
@@ -63,6 +63,31 @@ def sample_points(arr: np.ndarray, lons, lats) -> np.ndarray:
     cols = np.clip(((lons - GRID.min_lon) / GRID.res).astype(int), 0, GRID.nx - 1)
     rows = np.clip(((GRID.max_lat - lats) / GRID.res).astype(int), 0, GRID.ny - 1)
     return arr[rows, cols]
+
+
+def centroids_lonlat(gdf: gpd.GeoDataFrame) -> tuple[np.ndarray, np.ndarray]:
+    """Polygon centroids as lon/lat, computed in a projected CRS (no geographic-CRS warning)."""
+    c = gdf.to_crs(CRS_METRIC).geometry.centroid
+    c = gpd.GeoSeries(c, crs=CRS_METRIC).to_crs(CRS_GEO)
+    return c.x.to_numpy(), c.y.to_numpy()
+
+
+def idw_interpolate(gdf: gpd.GeoDataFrame, col: str, lon: np.ndarray, lat: np.ndarray,
+                    power: float = 2.0) -> np.ndarray:
+    """Inverse-distance-weighted interpolation of a habitation attribute onto arbitrary
+    lon/lat points (a full grid mesh, or a handful of sample points for ML training)."""
+    px, py = centroids_lonlat(gdf)
+    v = gdf[col].to_numpy(dtype="float32")
+    lon = np.asarray(lon, dtype="float32")
+    lat = np.asarray(lat, dtype="float32")
+    out = np.zeros_like(lon, dtype="float32")
+    wsum = np.zeros_like(lon, dtype="float32")
+    for xi, yi, vi in zip(px, py, v):
+        d2 = (lon - xi) ** 2 + (lat - yi) ** 2 + 1e-9
+        w = 1.0 / d2 ** (power / 2.0)
+        out += w * vi
+        wsum += w
+    return (out / wsum).astype("float32")
 
 
 def rowcol(lon: float, lat: float) -> tuple[int, int]:
